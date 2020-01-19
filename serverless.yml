@@ -1,0 +1,93 @@
+service:
+  name: nim-url-shortener
+
+custom:
+  urls_table_name: serverless-nim-sample-urls
+  url_index_name: serverless-nim-sample-url-gsi
+
+plugins:
+  - "@epiphone/serverless-nim"
+
+package:
+  excludeDevDependencies: false
+  individually: true
+
+provider:
+  name: aws
+  runtime: nim
+  apiGateway:
+    minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
+  environment:
+    URLS_TABLE_NAME: ${self:custom.urls_table_name}
+    URL_INDEX_NAME: ${self:custom.url_index_name}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+      Resource:
+        - arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:custom.urls_table_name}
+        - arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:custom.urls_table_name}/index/*
+
+functions:
+  getUrl:
+    handler: src/getUrl.nim
+    events:
+      - http:
+          method: get
+          path: /{id}
+          request:
+          parameters:
+             paths:
+               id: true
+  createUrl:
+    handler: src/createUrl.nim
+    events:
+      - http:
+          method: post
+          path: /
+          parameters:
+            querystrings:
+              url: true
+  getStats:
+    handler: src/getStats.nim
+    events:
+      - http:
+          method: get
+          path: /{id}/stats
+          request:
+          parameters:
+             paths:
+               id: true
+
+resources:
+  Resources:
+    urlsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.urls_table_name}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: url
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:custom.url_index_name}
+            KeySchema:
+              - AttributeName: url
+                KeyType: HASH
+            Projection:
+              ProjectionType: INCLUDE
+              NonKeyAttributes:
+                - id
+            ProvisionedThroughput:
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
