@@ -12,8 +12,6 @@ proc handler(event: JsonNode, context: LambdaContext): Future[JsonNode] {.async.
     return %* {"statusCode": 400, "body": $body}
 
   let
-    # Need to pass headers manually until https://github.com/disruptek/atoz/issues/3 gets resolved:
-    headers = %* {"X-Amz-Security-Token": os.getEnv("AWS_SESSION_TOKEN")}
     queryParams = %* {
       "TableName": URLS_TABLE_NAME,
       "IndexName": URL_INDEX_NAME,
@@ -22,7 +20,7 @@ proc handler(event: JsonNode, context: LambdaContext): Future[JsonNode] {.async.
       "ExpressionAttributeValues": {":url": {"S": url}},
       "ProjectionExpression": "id",
       "Limit": 1}
-    queryResponse = await query.call(nil, nil, headers, nil, queryParams).issueRequest()
+    queryResponse = await query.call(queryParams).issueRequest()
 
   if not queryResponse.code.is2xx:
     raise newException(Exception, await queryResponse.body)
@@ -41,7 +39,7 @@ proc handler(event: JsonNode, context: LambdaContext): Future[JsonNode] {.async.
         "hits": {"M": {}}
       }
     }
-    putResponse = await putItem.call(nil, nil, headers, nil, putParams).issueRequest()
+    putResponse = await putItem.call(putParams).issueRequest()
 
   if not putResponse.code.is2xx:
     raise newException(Exception, await putResponse.body)
